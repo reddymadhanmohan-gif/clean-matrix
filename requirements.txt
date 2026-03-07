@@ -1,6 +1,7 @@
-pandas
-scikit-learn
-streamlit
-supabase
-python-dotenv
-openpyxl
+pandas==2.2.2
+scikit-learn==1.4.2
+streamlit==1.35.0
+supabase==2.4.0
+python-dotenv==1.0.1
+openpyxl==3.1.2
+altair==5.3.0
