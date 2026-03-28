@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>⚡ Clean Master v2</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family:'Segoe UI',sans-serif;
+  background:linear-gradient(135deg,#0a0014 0%,#060b18 40%,#000d1a 100%);
+  min-height:100vh; color:#e2e8f0; display:flex;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width:230px; min-height:100vh; flex-shrink:0;
+  background:rgba(10,5,30,0.97);
+  border-right:1px solid rgba(99,102,241,0.25);
+  display:flex; flex-direction:column; padding:1.5rem 1rem;
+  position:fixed; top:0; left:0; height:100vh; z-index:100;
+}
+.sidebar .logo { font-size:1.4rem; font-weight:900; color:#6366f1; margin-bottom:2rem; }
+.sidebar .logo span { color:#a5b4fc; font-size:.9rem; font-weight:400; display:block; }
+.nav-btn {
+  display:flex; align-items:center; gap:.7rem;
+  padding:.7rem 1rem; border-radius:10px; cursor:pointer;
+  color:#94a3b8; font-size:.88rem; font-weight:500;
+  transition:all .2s; margin-bottom:.3rem; border:none;
+  background:transparent; width:100%; text-align:left;
+}
+.nav-btn:hover  { background:rgba(99,102,241,0.12); color:#a5b4fc; }
+.nav-btn.active { background:rgba(99,102,241,0.2); color:#a5b4fc;
+                  border-left:3px solid #6366f1; }
+.sidebar-footer { margin-top:auto; padding-top:1rem;
+                  border-top:1px solid rgba(99,102,241,0.15); }
+.user-info { font-size:.8rem; color:#64748b; margin-bottom:.7rem; }
+.user-info span { color:#a5b4fc; font-weight:600; }
+.logout-btn {
+  display:block; text-align:center; padding:.5rem;
+  background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.3);
+  color:#f87171; border-radius:8px; font-size:.82rem; cursor:pointer;
+  text-decoration:none; transition:background .2s;
+}
+.logout-btn:hover { background:rgba(248,113,113,0.2); }
+
+/* ── Main content ── */
+.main { margin-left:230px; flex:1; padding:2rem; min-height:100vh; }
+
+/* ── Section title ── */
+.section-title {
+  margin:1.5rem 0 .8rem;
+  border-bottom:1px solid rgba(99,102,241,0.2);
+  padding-bottom:.5rem;
+}
+.section-title h2 { font-size:1rem; font-weight:700; color:#a5b4fc; }
+.section-title p  { font-size:.75rem; color:#475569; }
+
+/* ── Steps bar ── */
+.steps-bar { display:flex; gap:.4rem; margin-bottom:1.5rem; flex-wrap:wrap; }
+.step {
+  flex:1; min-width:80px; padding:.45rem .5rem; text-align:center;
+  border-radius:8px; font-size:.72rem; font-weight:600;
+  background:rgba(15,10,40,0.6); border:1px solid rgba(99,102,241,0.15);
+  color:#475569; transition:all .3s;
+}
+.step.done { background:rgba(99,102,241,0.15); border-color:rgba(99,102,241,0.5); color:#a5b4fc; }
+.step.active { background:rgba(99,102,241,0.25); border-color:#6366f1; color:#c7d2fe; }
+
+/* ── Metric cards ── */
+.metric-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:.8rem; margin-bottom:1rem; }
+@media(max-width:1100px){ .metric-grid{grid-template-columns:repeat(3,1fr);} }
+.metric-card {
+  background:rgba(15,10,40,0.7); border-radius:14px; padding:1rem .8rem;
+  text-align:center; border-top:3px solid transparent;
+  border:1px solid rgba(99,102,241,0.15);
+}
+.metric-card .icon  { font-size:1.4rem; }
+.metric-card .val   { font-size:1.5rem; font-weight:900; margin:.3rem 0 .15rem; }
+.metric-card .label { font-size:.65rem; color:#64748b; text-transform:uppercase; letter-spacing:.5px; }
+
+/* ── Quality badge ── */
+.quality-badge {
+  background:rgba(15,10,40,0.8); border-radius:16px; padding:1rem 1.5rem;
+  text-align:center; border:2px solid;
+  display:inline-block; min-width:140px;
+}
+.quality-badge .grade { font-size:3rem; font-weight:900; }
+.quality-badge .score { font-size:1.1rem; font-weight:700; }
+.quality-badge .lbl   { font-size:.7rem; color:#64748b; text-transform:uppercase; }
+
+/* ── Drop zone ── */
+.drop-zone {
+  border:2px dashed rgba(99,102,241,0.4); border-radius:14px;
+  padding:2.5rem; text-align:center; cursor:pointer;
+  transition:all .2s; margin-bottom:1rem;
+}
+.drop-zone:hover,.drop-zone.drag-over {
+  border-color:#6366f1; background:rgba(99,102,241,0.06);
+}
+.drop-zone .dz-icon { font-size:2.5rem; }
+.drop-zone p { color:#94a3b8; margin-top:.5rem; font-size:.88rem; }
+
+/* ── Settings grid ── */
+.settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+@media(max-width:800px){ .settings-grid{grid-template-columns:1fr;} }
+.settings-card {
+  background:rgba(15,10,40,0.6); border:1px solid rgba(99,102,241,0.2);
+  border-radius:14px; padding:1.2rem;
+}
+.settings-card h3 { font-size:.85rem; font-weight:700; color:#a5b4fc; margin-bottom:1rem; }
+.form-group { margin-bottom:.9rem; }
+.form-group label {
+  display:block; font-size:.75rem; color:#94a3b8;
+  text-transform:uppercase; letter-spacing:.5px; margin-bottom:.4rem;
+}
+select, input[type=range] {
+  width:100%; background:rgba(15,10,40,0.85);
+  border:1px solid rgba(99,102,241,0.35); border-radius:8px;
+  color:#e2e8f0; padding:.55rem .8rem; font-size:.88rem; outline:none;
+}
+select:focus { border-color:#6366f1; }
+.range-row { display:flex; align-items:center; gap:.8rem; }
+.range-row input { flex:1; accent-color:#6366f1; }
+.range-val { color:#a5b4fc; font-weight:700; font-size:.85rem; min-width:40px; }
+.checkbox-row { display:flex; align-items:center; gap:.6rem; margin-bottom:.6rem; }
+.checkbox-row input { accent-color:#6366f1; width:16px; height:16px; }
+.checkbox-row label { font-size:.85rem; color:#94a3b8; text-transform:none; letter-spacing:0; cursor:pointer; }
+
+/* ── Buttons ── */
+.btn-primary {
+  background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  color:white; border:none; border-radius:12px;
+  padding:.9rem 2rem; font-size:1rem; font-weight:700;
+  cursor:pointer; transition:opacity .2s; width:100%;
+}
+.btn-primary:hover { opacity:.88; }
+.btn-primary:disabled { opacity:.4; cursor:not-allowed; }
+.btn-green {
+  background:linear-gradient(135deg,#059669,#34d399);
+  color:white; border:none; border-radius:12px;
+  padding:.85rem 1.5rem; font-size:.95rem; font-weight:700;
+  cursor:pointer; width:100%; transition:opacity .2s;
+}
+.btn-green:hover { opacity:.88; }
+.btn-outline {
+  background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.4);
+  color:#a5b4fc; border-radius:10px; padding:.7rem 1.2rem;
+  font-size:.88rem; font-weight:600; cursor:pointer; transition:all .2s;
+}
+.btn-outline:hover { background:rgba(99,102,241,0.2); }
+
+/* ── Tables ── */
+.data-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+.data-table th {
+  background:rgba(15,10,40,0.9); color:#94a3b8;
+  padding:.55rem .8rem; text-align:left; font-size:.72rem;
+  text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid rgba(99,102,241,0.2);
+}
+.data-table td {
+  padding:.5rem .8rem; border-bottom:1px solid rgba(99,102,241,0.08);
+  color:#cbd5e1; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.data-table tr:hover td { background:rgba(99,102,241,0.05); }
+.table-wrap { overflow-x:auto; border-radius:12px; border:1px solid rgba(99,102,241,0.15); }
+
+/* ── Alert boxes ── */
+.alert { border-radius:10px; padding:.8rem 1rem; font-size:.88rem; margin:.8rem 0; }
+.alert-info    { background:rgba(34,211,238,0.08); border:1px solid rgba(34,211,238,0.3); color:#67e8f9; }
+.alert-warn    { background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.3); color:#fde68a; }
+.alert-error   { background:rgba(248,113,113,0.08); border:1px solid rgba(248,113,113,0.3); color:#fca5a5; }
+.alert-success { background:rgba(52,211,153,0.08); border:1px solid rgba(52,211,153,0.3); color:#6ee7b7; }
+
+/* ── Results ── */
+.results-banner {
+  background:linear-gradient(135deg,rgba(52,211,153,0.1),rgba(99,102,241,0.08));
+  border:1px solid rgba(52,211,153,0.3); border-radius:18px; padding:1.5rem;
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;
+  margin-bottom:1.5rem;
+}
+.banner-title { font-size:1.3rem; font-weight:900; color:#34d399; }
+.banner-sub   { font-size:.8rem; color:#64748b; margin-top:3px; }
+.banner-stats { display:flex; gap:2rem; flex-wrap:wrap; }
+.banner-stat .val { font-size:1.5rem; font-weight:900; }
+.banner-stat .lbl { font-size:.62rem; color:#475569; text-transform:uppercase; }
+
+.score-row {
+  display:flex; align-items:center; justify-content:center;
+  gap:1.5rem; margin:1rem 0;
+}
+.arrow-icon { font-size:1.8rem; color:#6366f1; }
+
+/* ── Charts ── */
+.chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+@media(max-width:900px){ .chart-grid{grid-template-columns:1fr;} }
+.chart-card {
+  background:rgba(15,10,40,0.7); border:1px solid rgba(99,102,241,0.15);
+  border-radius:14px; padding:1rem;
+}
+.chart-card h4 { font-size:.8rem; color:#94a3b8; margin-bottom:.8rem; }
+
+/* ── History cards ── */
+.history-card {
+  background:rgba(15,10,40,0.7); border:1px solid rgba(99,102,241,0.2);
+  border-radius:14px; padding:1rem 1.2rem; margin-bottom:.6rem;
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem;
+}
+.history-card .filename { font-size:.95rem; font-weight:700; color:#e2e8f0; }
+.history-card .date     { font-size:.7rem; color:#475569; margin-top:2px; }
+.history-stats { display:flex; gap:1.5rem; flex-wrap:wrap; }
+.hstat .val { font-size:.85rem; font-weight:700; }
+.hstat .lbl { font-size:.6rem; color:#475569; }
+
+/* ── API key ── */
+.api-key-box {
+  background:rgba(15,10,40,0.8); border:1px solid rgba(99,102,241,0.3);
+  border-radius:12px; padding:1rem; font-family:monospace;
+  font-size:.9rem; color:#a5b4fc; word-break:break-all;
+  margin:1rem 0;
+}
+.code-block {
+  background:#0f0a28; border:1px solid rgba(99,102,241,0.2);
+  border-radius:10px; padding:1rem; font-family:monospace;
+  font-size:.8rem; color:#c7d2fe; white-space:pre; overflow-x:auto;
+}
+
+/* ── Expander ── */
+.expander { border:1px solid rgba(99,102,241,0.2); border-radius:12px; margin:.8rem 0; }
+.expander-header {
+  padding:.8rem 1rem; cursor:pointer; display:flex;
+  justify-content:space-between; align-items:center;
+  font-size:.88rem; color:#a5b4fc; font-weight:600;
+}
+.expander-body { padding:1rem; border-top:1px solid rgba(99,102,241,0.15); display:none; }
+.expander-body.open { display:block; }
+
+/* ── Spinner ── */
+.spinner { display:none; text-align:center; padding:2rem; color:#94a3b8; }
+.spinner.show { display:block; }
+
+/* ── Pages ── */
+.page { display:none; }
+.page.active { display:block; }
+
+/* ── Compare btn ── */
+#compare-section { display:none; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="logo">⚡ Clean Master <span>v2 — AI Data Cleaning</span></div>
+  <button class="nav-btn active" onclick="showPage('upload')" id="nav-upload">📤 Upload & Clean</button>
+  <button class="nav-btn" onclick="showPage('history')" id="nav-history">📂 History</button>
+  <button class="nav-btn" onclick="showPage('api')" id="nav-api">🔑 API Access</button>
+  <div class="sidebar-footer">
+    <div class="user-info">Signed in as <span id="sidebar-user">...</span></div>
+    <a href="/logout" class="logout-btn">Sign Out</a>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+<!-- ═══════════════ UPLOAD PAGE ═══════════════ -->
+<div class="page active" id="page-upload">
+
+  <!-- Steps bar -->
+  <div class="steps-bar" id="steps-bar">
+    <div class="step active" id="step1">1 · Upload</div>
+    <div class="step" id="step2">2 · Detect</div>
+    <div class="step" id="step3">3 · Impute</div>
+    <div class="step" id="step4">4 · Outliers</div>
+    <div class="step" id="step5">5 · Scale</div>
+    <div class="step" id="step6">6 · Export</div>
+  </div>
+
+  <!-- Upload zone -->
+  <div class="section-title"><h2>📤 Upload Dataset</h2><p>CSV · Excel · JSON · TSV</p></div>
+  <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+    <div class="dz-icon">📂</div>
+    <p id="dz-text">Click to browse or drag & drop your file here</p>
+    <p>Supports: CSV · Excel (.xlsx) · JSON · TSV</p>
+  </div>
+  <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.json,.tsv" style="display:none">
+
+  <!-- File metrics (hidden until file loaded) -->
+  <div id="file-metrics" style="display:none">
+    <div class="metric-grid" id="metrics-grid"></div>
+    <div id="quality-alert"></div>
+
+    <!-- EDA expander -->
+    <div class="expander" id="eda-expander">
+      <div class="expander-header" onclick="toggleExpander('eda-body','eda-arrow')">
+        📊 Show full dataset analysis <span id="eda-arrow">▼</span>
+      </div>
+      <div class="expander-body" id="eda-body">
+        <div class="settings-grid" style="margin-bottom:1rem">
+          <div>
+            <h4 style="font-size:.82rem;color:#94a3b8;margin-bottom:.6rem">Column Types</h4>
+            <div class="table-wrap"><table class="data-table" id="col-types-table"></table></div>
+          </div>
+          <div>
+            <h4 style="font-size:.82rem;color:#94a3b8;margin-bottom:.6rem">Numeric Summary</h4>
+            <div class="table-wrap"><table class="data-table" id="stats-table"></table></div>
+          </div>
+        </div>
+        <div id="corr-section">
+          <h4 style="font-size:.82rem;color:#94a3b8;margin-bottom:.6rem">Top Correlations</h4>
+          <div class="table-wrap"><table class="data-table" id="corr-table"></table></div>
+        </div>
+        <div id="outlier-preview-section" style="margin-top:1rem">
+          <h4 style="font-size:.82rem;color:#94a3b8;margin-bottom:.6rem">Likely Outlier Rows (top 5)</h4>
+          <div class="table-wrap"><table class="data-table" id="outlier-preview-table"></table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data preview -->
+    <div class="section-title"><h2>👀 Data Preview</h2></div>
+    <div class="table-wrap"><table class="data-table" id="preview-table"></table></div>
+
+    <!-- Pipeline settings -->
+    <div class="section-title"><h2>⚙️ Pipeline Settings</h2></div>
+    <div class="settings-grid">
+      <div class="settings-card">
+        <h3>Imputation</h3>
+        <div class="form-group">
+          <label>Missing value method</label>
+          <select id="impute-method">
+            <option value="knn">KNN Imputation (smart, context-aware)</option>
+            <option value="mean">Mean Imputation (fast)</option>
+            <option value="median">Median Imputation (robust to outliers)</option>
+            <option value="mode">Mode Imputation (most frequent)</option>
+            <option value="ffill">Forward Fill (time-series friendly)</option>
+          </select>
+        </div>
+        <div class="form-group" id="knn-row">
+          <label>KNN neighbors (k)</label>
+          <div class="range-row">
+            <input type="range" id="knn-k" min="3" max="15" value="5" oninput="document.getElementById('knn-val').textContent=this.value">
+            <span class="range-val" id="knn-val">5</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Outlier contamination rate</label>
+          <div class="range-row">
+            <input type="range" id="contamination" min="1" max="20" value="5" oninput="document.getElementById('cont-val').textContent=(this.value/100).toFixed(2)">
+            <span class="range-val" id="cont-val">0.05</span>
+          </div>
+        </div>
+      </div>
+      <div class="settings-card">
+        <h3>Options</h3>
+        <div class="checkbox-row">
+          <input type="checkbox" id="do-scale">
+          <label for="do-scale">Apply StandardScaler normalization</label>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="do-encode" onchange="toggleEncode()">
+          <label for="do-encode">Encode categorical columns</label>
+        </div>
+        <div class="form-group" id="encode-row" style="display:none;margin-left:1.5rem">
+          <label>Encoding method</label>
+          <select id="encode-method">
+            <option value="label">Label Encoding</option>
+            <option value="onehot">One-Hot Encoding</option>
+          </select>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="do-automl" onchange="toggleAutoML()">
+          <label for="do-automl">Run AutoML preview after cleaning</label>
+        </div>
+        <div class="form-group" id="automl-row" style="display:none;margin-left:1.5rem">
+          <label>Target column (for prediction)</label>
+          <select id="target-col"><option value="">Auto-detect</option></select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Run button -->
+    <div style="max-width:400px;margin:1.5rem auto 0">
+      <button class="btn-primary" id="run-btn" onclick="runPipeline()">⚡ Run Clean Master Pipeline</button>
+    </div>
+  </div><!-- /file-metrics -->
+
+  <!-- Spinner -->
+  <div class="spinner" id="spinner">
+    <div style="font-size:2rem;margin-bottom:.5rem">🔬</div>
+    Running ML pipeline — please wait...
+  </div>
+
+  <!-- Results section -->
+  <div id="results-section" style="display:none">
+    <div class="section-title"><h2>📊 Cleaning Results</h2></div>
+
+    <!-- Success banner -->
+    <div class="results-banner">
+      <div>
+        <div class="banner-title">✅ Cleaning Complete!</div>
+        <div class="banner-sub">Your dataset has been cleaned and is ready to download.</div>
+      </div>
+      <div class="banner-stats" id="banner-stats"></div>
+    </div>
+
+    <!-- Quality badges -->
+    <div class="score-row">
+      <div>
+        <div class="quality-badge" id="pre-badge"></div>
+        <div style="text-align:center;font-size:.75rem;color:#64748b;margin-top:.4rem">Before cleaning</div>
+      </div>
+      <div class="arrow-icon">→</div>
+      <div>
+        <div class="quality-badge" id="post-badge"></div>
+        <div style="text-align:center;font-size:.75rem;color:#64748b;margin-top:.4rem">After cleaning</div>
+      </div>
+    </div>
+
+    <!-- Download + Compare buttons -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;max-width:520px;margin:1.2rem auto">
+      <button class="btn-green" id="dl-btn">⬇️ Download Cleaned CSV</button>
+      <button class="btn-outline" onclick="toggleCompare()">📊 View Detailed Comparison</button>
+    </div>
+
+    <!-- Comparison section (hidden by default) -->
+    <div id="compare-section">
+      <!-- Metric cards -->
+      <div class="metric-grid" id="result-metrics"></div>
+
+      <!-- Charts -->
+      <div class="section-title"><h2>📈 Visualisations</h2></div>
+      <div class="chart-grid">
+        <div class="chart-card"><h4>Pipeline Summary</h4><canvas id="chart-pipeline"></canvas></div>
+        <div class="chart-card"><h4>Data Retention</h4><canvas id="chart-donut"></canvas></div>
+      </div>
+      <div class="chart-card" style="margin-top:1rem" id="missing-chart-card">
+        <h4>Missing Values per Column (%)</h4><canvas id="chart-missing"></canvas>
+      </div>
+
+      <!-- Before / After preview -->
+      <div class="section-title"><h2>🔀 Before / After Preview</h2></div>
+      <div class="settings-grid">
+        <div>
+          <div style="font-size:.78rem;color:#f87171;font-weight:700;margin-bottom:.4rem">BEFORE (first 8 rows)</div>
+          <div class="table-wrap"><table class="data-table" id="before-table"></table></div>
+        </div>
+        <div>
+          <div style="font-size:.78rem;color:#34d399;font-weight:700;margin-bottom:.4rem">AFTER (first 8 rows)</div>
+          <div class="table-wrap"><table class="data-table" id="after-table"></table></div>
+        </div>
+      </div>
+
+      <!-- Missing breakdown -->
+      <div id="missing-breakdown-section"></div>
+
+      <!-- Outlier explanation -->
+      <div id="outlier-explain-section"></div>
+
+      <!-- AutoML -->
+      <div id="automl-section"></div>
+    </div><!-- /compare-section -->
+  </div><!-- /results-section -->
+</div><!-- /page-upload -->
+
+
+<!-- ═══════════════ HISTORY PAGE ═══════════════ -->
+<div class="page" id="page-history">
+  <div class="section-title"><h2>📂 Processing History</h2><p>All your past cleaning jobs</p></div>
+  <div class="metric-grid" style="grid-template-columns:repeat(4,1fr)" id="history-summary"></div>
+  <div id="history-list" style="margin-top:1rem"></div>
+  <div id="history-chart-card" class="chart-card" style="margin-top:1rem;display:none">
+    <h4>Quality Score Over Time</h4>
+    <canvas id="chart-history"></canvas>
+  </div>
+</div>
+
+<!-- ═══════════════ API PAGE ═══════════════ -->
+<div class="page" id="page-api">
+  <div class="section-title"><h2>🔑 API Access</h2><p>Integrate Clean Master into your own apps</p></div>
+  <div class="settings-card" style="max-width:600px">
+    <h3>Your API Key</h3>
+    <div class="api-key-box" id="api-key-display">No key generated yet</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem">
+      <button class="btn-primary" onclick="generateKey()">🔄 Generate / Regenerate Key</button>
+      <button class="btn-outline" onclick="copyKey()">📋 Copy Key</button>
+    </div>
+  </div>
+  <div class="section-title" style="margin-top:2rem"><h2>📖 Usage Example</h2></div>
+  <div class="code-block" id="api-code-example">Generate a key first to see the usage example.</div>
+</div>
+
+</div><!-- /main -->
+
+<script>
+// ─── Init ───────────────────────────────────────────────────────────────────
+let currentFile = null;
+let tmpPath = null;
+let downloadUrl = '';
+let edaData = null;
+let rawPreview = [];
+let compareOpen = false;
+let pipelineChart = null, donutChart = null, missingChart = null, historyChart = null;
+
+fetch('/api/me').then(r => r.json()).then(d => {
+  document.getElementById('sidebar-user').textContent = d.username;
+}).catch(() => { window.location.href = '/login'; });
+
+// ─── Navigation ─────────────────────────────────────────────────────────────
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.getElementById('nav-'+page).classList.add('active');
+  if (page === 'history') loadHistory();
+  if (page === 'api') loadApiKey();
+}
+
+// ─── Expander ────────────────────────────────────────────────────────────────
+function toggleExpander(bodyId, arrowId) {
+  const body = document.getElementById(bodyId);
+  body.classList.toggle('open');
+  document.getElementById(arrowId).textContent = body.classList.contains('open') ? '▲' : '▼';
+}
+
+// ─── Dropzone ────────────────────────────────────────────────────────────────
+const zone = document.getElementById('drop-zone');
+zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) { document.getElementById('file-input').files = e.dataTransfer.files; handleFile(f); }
+});
+document.getElementById('file-input').addEventListener('change', function() {
+  if (this.files[0]) handleFile(this.files[0]);
+});
+
+async function handleFile(file) {
+  currentFile = file;
+  document.getElementById('dz-text').textContent = '📄 ' + file.name;
+  document.getElementById('file-metrics').style.display = 'none';
+  document.getElementById('results-section').style.display = 'none';
+  document.getElementById('spinner').classList.add('show');
+  setStep(1);
+
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await fetch('/api/eda', { method:'POST', body:form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    edaData = data;
+    tmpPath = data.tmp_path;
+    rawPreview = data.preview;
+    renderFileMetrics(data);
+    renderEDA(data);
+    renderPreviewTable('preview-table', data.preview, data.columns);
+    populateTargetCols(data.num_cols);
+    document.getElementById('file-metrics').style.display = 'block';
+    setStep(2);
+  } catch(e) {
+    alert('Error reading file: ' + e.message);
+  }
+  document.getElementById('spinner').classList.remove('show');
+}
+
+// ─── Render file metric cards ────────────────────────────────────────────────
+function renderFileMetrics(data) {
+  const q = data.quality;
+  const gradeColor = q.grade==='A'?'#34d399':q.grade==='B'?'#22d3ee':q.grade==='C'?'#fbbf24':q.grade==='D'?'#fb923c':'#f87171';
+  const cards = [
+    {icon:'📊', val:data.rows.toLocaleString(), label:'Rows', color:'#818cf8'},
+    {icon:'📋', val:data.cols.toLocaleString(), label:'Columns', color:'#22d3ee'},
+    {icon:'🔢', val:data.numeric_cols.toLocaleString(), label:'Numeric', color:'#a855f7'},
+    {icon:'⚠️', val:data.missing.toLocaleString(), label:'Missing', color:'#fbbf24'},
+    {icon:'🔁', val:data.duplicates.toLocaleString(), label:'Duplicates', color:'#fb923c'},
+    {icon:'🏆', val:q.score+'/100', label:'Quality · '+q.grade, color:gradeColor},
+  ];
+  const grid = document.getElementById('metrics-grid');
+  grid.innerHTML = cards.map(c=>`
+    <div class="metric-card" style="border-top:3px solid ${c.color}">
+      <div class="icon">${c.icon}</div>
+      <div class="val" style="color:${c.color}">${c.val}</div>
+      <div class="label">${c.label}</div>
+    </div>`).join('');
+
+  const qa = document.getElementById('quality-alert');
+  if (q.score < 60)
+    qa.innerHTML = `<div class="alert alert-error">⚠️ Low data quality (${q.score}/100 · Grade ${q.grade}). Missing: ${q.missing_pct}% · Outlier est: ${q.outlier_pct}%</div>`;
+  else if (q.score < 80)
+    qa.innerHTML = `<div class="alert alert-warn">📊 Moderate quality (${q.score}/100 · Grade ${q.grade}). Pipeline will fix: ${data.missing.toLocaleString()} missing values.</div>`;
+  else
+    qa.innerHTML = `<div class="alert alert-info">✅ Good quality (${q.score}/100 · Grade ${q.grade}). Pipeline will still clean outliers and duplicates.</div>`;
+}
+
+// ─── Render EDA ──────────────────────────────────────────────────────────────
+function renderEDA(data) {
+  const eda = data.eda;
+  // column types
+  const colTypes = Object.entries(eda.dtypes).map(([c,t])=>({
+    Column:c, Type:t, Missing:eda.missing_by_col[c]||0, Unique:'—'
+  }));
+  renderTable('col-types-table', colTypes, ['Column','Type','Missing']);
+  // stats
+  if (eda.stats && Object.keys(eda.stats).length) {
+    const statRows = Object.entries(eda.stats).map(([col,s])=>({
+      Column:col, Mean:s.mean?.toFixed(2)||'—', Min:s.min?.toFixed(2)||'—', Max:s.max?.toFixed(2)||'—'
+    }));
+    renderTable('stats-table', statRows, ['Column','Mean','Min','Max']);
+  }
+  // correlations
+  if (eda.correlations && eda.correlations.length) {
+    renderTable('corr-table', eda.correlations.map(c=>({Col1:c.col1,Col2:c.col2,Corr:c.corr})), ['Col1','Col2','Corr']);
+  }
+  // outlier preview
+  if (eda.top_outlier_rows && eda.top_outlier_rows.length) {
+    renderTable('outlier-preview-table', eda.top_outlier_rows.map(r=>({Row:r.row,'Anomaly Score':r.score})), ['Row','Anomaly Score']);
+  }
+}
+
+// ─── Generic table renderer ──────────────────────────────────────────────────
+function renderTable(id, rows, cols) {
+  if (!rows || !rows.length) return;
+  const t = document.getElementById(id);
+  const keys = cols || Object.keys(rows[0]);
+  t.innerHTML = `<thead><tr>${keys.map(k=>`<th>${k}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r=>`<tr>${keys.map(k=>`<td title="${r[k]}">${r[k]}</td>`).join('')}</tr>`).join('')}</tbody>`;
+}
+
+function renderPreviewTable(id, rows, cols) {
+  if (!rows || !rows.length) return;
+  renderTable(id, rows, cols);
+}
+
+// ─── Settings toggles ────────────────────────────────────────────────────────
+document.getElementById('impute-method').addEventListener('change', function() {
+  document.getElementById('knn-row').style.display = this.value==='knn' ? 'block' : 'none';
+});
+function toggleEncode() {
+  document.getElementById('encode-row').style.display = document.getElementById('do-encode').checked ? 'block' : 'none';
+}
+function toggleAutoML() {
+  document.getElementById('automl-row').style.display = document.getElementById('do-automl').checked ? 'block' : 'none';
+}
+function populateTargetCols(numCols) {
+  const sel = document.getElementById('target-col');
+  sel.innerHTML = '<option value="">Auto-detect</option>' + numCols.map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+
+// ─── Steps bar ───────────────────────────────────────────────────────────────
+function setStep(n) {
+  for (let i=1;i<=6;i++) {
+    const el = document.getElementById('step'+i);
+    el.className = 'step' + (i<n?' done':i===n?' active':'');
+  }
+}
+
+// ─── Run pipeline ────────────────────────────────────────────────────────────
+async function runPipeline() {
+  if (!tmpPath) return;
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('spinner').classList.add('show');
+  document.getElementById('results-section').style.display = 'none';
+  setStep(3);
+
+  const body = {
+    tmp_path      : tmpPath,
+    filename      : currentFile.name,
+    impute_method : document.getElementById('impute-method').value,
+    knn_neighbors : parseInt(document.getElementById('knn-k').value),
+    contamination : parseFloat(document.getElementById('contamination').value)/100,
+    scale         : document.getElementById('do-scale').checked,
+    encode        : document.getElementById('do-encode').checked,
+    encode_method : document.getElementById('encode-method').value,
+    run_automl    : document.getElementById('do-automl').checked,
+    target_col    : document.getElementById('target-col').value || null,
+  };
+
+  try {
+    setStep(4);
+    const res = await fetch('/api/clean', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    setStep(6);
+    downloadUrl = data.download_url;
+    renderResults(data);
+    document.getElementById('results-section').style.display = 'block';
+    document.getElementById('results-section').scrollIntoView({behavior:'smooth'});
+  } catch(e) {
+    alert('Pipeline error: ' + e.message);
+    setStep(1);
+  }
+
+  document.getElementById('spinner').classList.remove('show');
+  document.getElementById('run-btn').disabled = false;
+}
+
+// ─── Render results ──────────────────────────────────────────────────────────
+function renderResults(d) {
+  // Banner stats
+  const gain = (d.post_score - d.pre_score).toFixed(1);
+  document.getElementById('banner-stats').innerHTML = `
+    <div class="banner-stat"><div class="val" style="color:#818cf8">${d.original_rows.toLocaleString()} → ${d.cleaned_rows.toLocaleString()}</div><div class="lbl">Rows</div></div>
+    <div class="banner-stat"><div class="val" style="color:#fbbf24">${d.missing_filled.toLocaleString()}</div><div class="lbl">Values Filled</div></div>
+    <div class="banner-stat"><div class="val" style="color:#f87171">${d.outliers_removed.toLocaleString()}</div><div class="lbl">Outliers Removed</div></div>
+    <div class="banner-stat"><div class="val" style="color:#34d399">+${gain}</div><div class="lbl">Quality Gain</div></div>`;
+
+  // Quality badges
+  const gradeCol = g => g==='A'?'#34d399':g==='B'?'#22d3ee':g==='C'?'#fbbf24':g==='D'?'#fb923c':'#f87171';
+  document.getElementById('pre-badge').innerHTML = `
+    <div class="grade" style="color:${gradeCol(d.pre_grade)}">${d.pre_grade}</div>
+    <div class="score" style="color:${gradeCol(d.pre_grade)}">${d.pre_score}/100</div>
+    <div class="lbl">Quality Score</div>`;
+  document.getElementById('pre-badge').style.borderColor = gradeCol(d.pre_grade);
+  document.getElementById('post-badge').innerHTML = `
+    <div class="grade" style="color:${gradeCol(d.post_grade)}">${d.post_grade}</div>
+    <div class="score" style="color:${gradeCol(d.post_grade)}">${d.post_score}/100</div>
+    <div class="lbl">Quality Score</div>`;
+  document.getElementById('post-badge').style.borderColor = gradeCol(d.post_grade);
+
+  // Download
+  document.getElementById('dl-btn').onclick = () => window.location.href = downloadUrl;
+
+  // Result metric cards
+  const retained = (d.cleaned_rows/d.original_rows*100).toFixed(1);
+  const rCards = [
+    {icon:'📊',val:d.original_rows.toLocaleString(),label:'Original Rows',color:'#818cf8'},
+    {icon:'✅',val:d.cleaned_rows.toLocaleString(),label:'Clean Rows',color:'#34d399'},
+    {icon:'✨',val:d.missing_filled.toLocaleString(),label:'Values Filled',color:'#fbbf24'},
+    {icon:'🎯',val:d.outliers_removed.toLocaleString(),label:'Outliers Out',color:'#f87171'},
+    {icon:'🔁',val:d.duplicates_removed.toLocaleString(),label:'Duplicates Out',color:'#fb923c'},
+    {icon:'💎',val:retained+'%',label:'Data Retained',color:'#22d3ee'},
+  ];
+  document.getElementById('result-metrics').innerHTML = rCards.map(c=>`
+    <div class="metric-card" style="border-top:3px solid ${c.color}">
+      <div class="icon">${c.icon}</div>
+      <div class="val" style="color:${c.color}">${c.val}</div>
+      <div class="label">${c.label}</div>
+    </div>`).join('');
+
+  // Store for charts
+  window._resultData = d;
+
+  // Missing breakdown
+  const mbc = d.missing_by_col || {};
+  if (Object.keys(mbc).length) {
+    const rows = Object.entries(mbc).map(([col,cnt])=>{
+      const pct = (cnt/d.original_rows*100).toFixed(1);
+      return {Column:col, Missing:cnt, '%':pct+'%', Status:'✅ Filled'};
+    });
+    document.getElementById('missing-breakdown-section').innerHTML = `
+      <div class="section-title"><h2>📋 Missing Values Breakdown</h2></div>
+      <div class="table-wrap"><table class="data-table" id="missing-breakdown-table"></table></div>`;
+    renderTable('missing-breakdown-table', rows, ['Column','Missing','%','Status']);
+  }
+
+  // Outlier explanation
+  if (d.outlier_info && d.outlier_info.length) {
+    document.getElementById('outlier-explain-section').innerHTML = `
+      <div class="section-title"><h2>🔬 Outlier Explanation</h2><p>${d.outlier_info.length} sample removed rows</p></div>
+      <div class="expander">
+        <div class="expander-header" onclick="toggleExpander('outlier-body','outlier-arrow')">
+          See which rows were removed and why <span id="outlier-arrow">▼</span>
+        </div>
+        <div class="expander-body" id="outlier-body">
+          <div class="table-wrap"><table class="data-table" id="outlier-table"></table></div>
+          <p style="font-size:.75rem;color:#64748b;margin-top:.5rem">Higher _anomaly_score = more anomalous. Flagged by Isolation Forest.</p>
+        </div>
+      </div>`;
+    const outCols = d.outlier_info[0] ? Object.keys(d.outlier_info[0]) : [];
+    renderTable('outlier-table', d.outlier_info, outCols);
+  }
+
+  // AutoML
+  const aml = d.automl;
+  if (aml && aml.enabled) {
+    document.getElementById('automl-section').innerHTML = `
+      <div class="section-title"><h2>🤖 AutoML Preview</h2></div>
+      <div class="metric-grid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="metric-card" style="border-top:3px solid #22d3ee"><div class="icon">🎯</div><div class="val" style="color:#22d3ee;font-size:1rem">${aml.target}</div><div class="label">Target Column</div></div>
+        <div class="metric-card" style="border-top:3px solid #a855f7"><div class="icon">🤖</div><div class="val" style="color:#a855f7;font-size:1rem">${aml.model.split(' ')[1]}</div><div class="label">Model Type</div></div>
+        <div class="metric-card" style="border-top:3px solid #34d399"><div class="icon">📊</div><div class="val" style="color:#34d399">${aml.score_mean.toFixed(4)}</div><div class="label">${aml.metric}</div></div>
+      </div>
+      <div class="alert alert-info" style="margin-top:.8rem">Model: <b>${aml.model}</b> · ${aml.metric}: <b>${aml.score_mean.toFixed(4)} ± ${aml.score_std.toFixed(4)}</b> (3-fold CV) · Features: <b>${aml.features.slice(0,5).join(', ')}${aml.features.length>5?' ...':''}</b></div>`;
+  }
+}
+
+// ─── Compare toggle ──────────────────────────────────────────────────────────
+function toggleCompare() {
+  compareOpen = !compareOpen;
+  document.getElementById('compare-section').style.display = compareOpen ? 'block' : 'none';
+  if (compareOpen && window._resultData) drawCharts(window._resultData);
+}
+
+// ─── Charts (Chart.js) ───────────────────────────────────────────────────────
+function drawCharts(d) {
+  const dark = { color:'#64748b', grid:'rgba(99,102,241,0.1)' };
+  const cOpts = (title) => ({
+    responsive:true,
+    plugins:{ legend:{display:false}, title:{display:!!title,text:title,color:'#94a3b8',font:{size:11}} },
+    scales:{ x:{ticks:{color:dark.color},grid:{color:dark.grid}}, y:{ticks:{color:dark.color},grid:{color:dark.grid}} }
+  });
+
+  // destroy old charts
+  [pipelineChart,donutChart,missingChart].forEach(c=>{ if(c)c.destroy(); });
+
+  // Pipeline bar
+  pipelineChart = new Chart(document.getElementById('chart-pipeline'), {
+    type:'bar',
+    data:{
+      labels:['Original','Cleaned','Filled','Outliers Out'],
+      datasets:[{
+        data:[d.original_rows,d.cleaned_rows,d.missing_filled,d.outliers_removed],
+        backgroundColor:['#818cf8','#34d399','#fbbf24','#f87171'],
+        borderRadius:6,
+      }]
+    },
+    options:{...cOpts(), plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:dark.color},grid:{color:dark.grid}},y:{ticks:{color:dark.color},grid:{color:dark.grid}}}}
+  });
+
+  // Donut
+  const removed = d.original_rows - d.cleaned_rows;
+  donutChart = new Chart(document.getElementById('chart-donut'), {
+    type:'doughnut',
+    data:{
+      labels:['Retained','Removed'],
+      datasets:[{data:[d.cleaned_rows,removed],backgroundColor:['#34d399','#f87171'],borderWidth:0}]
+    },
+    options:{responsive:true,plugins:{legend:{labels:{color:'#94a3b8'}}}}
+  });
+
+  // Missing per column
+  const mbc = d.missing_by_col || {};
+  if (Object.keys(mbc).length) {
+    document.getElementById('missing-chart-card').style.display = 'block';
+    const pcts = Object.entries(mbc).map(([c,v])=>({col:c,pct:(v/d.original_rows*100).toFixed(1)}));
+    missingChart = new Chart(document.getElementById('chart-missing'), {
+      type:'bar',
+      data:{
+        labels:pcts.map(p=>p.col),
+        datasets:[{data:pcts.map(p=>p.pct),backgroundColor:'#fbbf24',borderRadius:4}]
+      },
+      options:{...cOpts(), indexAxis:'y',
+        scales:{x:{ticks:{color:dark.color,callback:v=>v+'%'},grid:{color:dark.grid}},y:{ticks:{color:dark.color},grid:{color:dark.grid}}}}
+    });
+  } else {
+    document.getElementById('missing-chart-card').style.display = 'none';
+  }
+}
+
+// ─── History ─────────────────────────────────────────────────────────────────
+async function loadHistory() {
+  const res = await fetch('/api/history');
+  const data = await res.json();
+  const history = data.history || [];
+
+  if (!history.length) {
+    document.getElementById('history-summary').innerHTML = '';
+    document.getElementById('history-list').innerHTML = `
+      <div style="text-align:center;padding:3rem;background:rgba(15,10,40,0.5);border:1px solid rgba(99,102,241,0.2);border-radius:16px">
+        <div style="font-size:2.5rem">📂</div>
+        <div style="color:#64748b;margin-top:.5rem">No cleaning jobs yet.</div>
+        <div style="color:#475569;font-size:.8rem">Upload a dataset to get started.</div>
+      </div>`;
+    return;
+  }
+
+  const totalMissing  = history.reduce((s,h)=>s+(h.missing_filled||0),0);
+  const totalOutliers = history.reduce((s,h)=>s+(h.outliers_removed||0),0);
+  const avgGain = (history.reduce((s,h)=>s+(h.post_score||0)-(h.pre_score||0),0)/history.length).toFixed(1);
+
+  document.getElementById('history-summary').innerHTML = `
+    <div class="metric-card" style="border-top:3px solid #818cf8"><div class="icon">🗂️</div><div class="val" style="color:#818cf8">${history.length}</div><div class="label">Total Jobs</div></div>
+    <div class="metric-card" style="border-top:3px solid #fbbf24"><div class="icon">✨</div><div class="val" style="color:#fbbf24">${totalMissing.toLocaleString()}</div><div class="label">Values Filled</div></div>
+    <div class="metric-card" style="border-top:3px solid #f87171"><div class="icon">🎯</div><div class="val" style="color:#f87171">${totalOutliers.toLocaleString()}</div><div class="label">Outliers Removed</div></div>
+    <div class="metric-card" style="border-top:3px solid #34d399"><div class="icon">📈</div><div class="val" style="color:#34d399">+${avgGain}</div><div class="label">Avg Score Gain</div></div>`;
+
+  document.getElementById('history-list').innerHTML = history.map(job => {
+    const gain = (job.post_score||0)-(job.pre_score||0);
+    const gc = gain>=0?'#34d399':'#f87171';
+    const date = (job.created_at||'').slice(0,16).replace('T',' ') || '—';
+    return `<div class="history-card">
+      <div><div class="filename">📄 ${job.filename||'—'}</div><div class="date">${date}</div></div>
+      <div class="history-stats">
+        <div class="hstat"><div class="val" style="color:#818cf8">${(job.original_rows||0).toLocaleString()} → ${(job.cleaned_rows||0).toLocaleString()}</div><div class="lbl">Rows</div></div>
+        <div class="hstat"><div class="val" style="color:#fbbf24">${(job.missing_filled||0).toLocaleString()}</div><div class="lbl">Filled</div></div>
+        <div class="hstat"><div class="val" style="color:#f87171">${(job.outliers_removed||0).toLocaleString()}</div><div class="lbl">Outliers</div></div>
+        <div class="hstat"><div class="val" style="color:${gc}">${gain>=0?'+':''}${gain.toFixed(1)}</div><div class="lbl">Score Gain</div></div>
+        <div class="hstat"><div class="val" style="color:#a5b4fc">${(job.impute_method||'knn').toUpperCase()}</div><div class="lbl">Method</div></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // History score chart
+  if (history.length >= 2) {
+    document.getElementById('history-chart-card').style.display = 'block';
+    if (historyChart) historyChart.destroy();
+    const rev = [...history].reverse();
+    historyChart = new Chart(document.getElementById('chart-history'), {
+      type:'line',
+      data:{
+        labels: rev.map(h=>(h.created_at||'').slice(0,10)),
+        datasets:[
+          {label:'Before',data:rev.map(h=>h.pre_score||0),borderColor:'#f87171',backgroundColor:'rgba(248,113,113,0.1)',tension:.3},
+          {label:'After', data:rev.map(h=>h.post_score||0),borderColor:'#34d399',backgroundColor:'rgba(52,211,153,0.08)',fill:'-1',tension:.3},
+        ]
+      },
+      options:{responsive:true,plugins:{legend:{labels:{color:'#94a3b8'}}},
+        scales:{x:{ticks:{color:'#64748b'},grid:{color:'rgba(99,102,241,0.1)'}},
+                y:{ticks:{color:'#64748b'},grid:{color:'rgba(99,102,241,0.1)'}}}}
+    });
+  }
+}
+
+// ─── API Key ─────────────────────────────────────────────────────────────────
+async function loadApiKey() {
+  const res = await fetch('/api/key');
+  const data = await res.json();
+  showApiKey(data.key);
+}
+async function generateKey() {
+  const res = await fetch('/api/key/generate', {method:'POST'});
+  const data = await res.json();
+  showApiKey(data.key);
+}
+function showApiKey(key) {
+  const el = document.getElementById('api-key-display');
+  el.textContent = key || 'No key yet — click Generate';
+  if (key) {
+    document.getElementById('api-code-example').textContent =
+`import requests
+
+API_KEY = "${key}"
+URL     = window.location.origin + "/api/clean"
+
+with open("your_data.csv", "rb") as f:
+    response = requests.post(
+        URL,
+        headers={"x-api-key": API_KEY},
+        files={"file": f}
+    )
+print(response.json())`;
+  }
+}
+function copyKey() {
+  const key = document.getElementById('api-key-display').textContent;
+  navigator.clipboard.writeText(key).then(()=>alert('Key copied!'));
+}
+</script>
+</body>
+</html>

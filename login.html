@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>⚡ Clean Master v2 — Login</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0a0014, #060b18, #000d1a);
+      min-height: 100vh; color: #e2e8f0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 2rem 1rem;
+    }
+    h1  { font-size: 3rem; color: #6366f1; font-weight: 900; margin-bottom: .3rem; }
+    .sub { color: #64748b; font-size: .95rem; margin-bottom: 2.5rem; text-align:center; }
+    .card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(99,102,241,0.3);
+      border-radius: 20px; padding: 2.5rem;
+      width: 100%; max-width: 420px;
+    }
+    .tabs { display:flex; gap:.5rem; margin-bottom:2rem; }
+    .tab {
+      flex:1; padding:.7rem; text-align:center;
+      border-radius:10px; cursor:pointer; font-weight:600;
+      font-size:.9rem; transition: all .2s;
+      border: 1px solid rgba(99,102,241,0.2);
+      color: #64748b; background: transparent;
+    }
+    .tab.active {
+      background: rgba(99,102,241,0.15);
+      border-color: #6366f1; color: #a5b4fc;
+    }
+    .form-group { margin-bottom:1.2rem; }
+    label { display:block; font-size:.82rem; color:#94a3b8;
+            text-transform:uppercase; letter-spacing:.5px; margin-bottom:.5rem; }
+    input[type=text], input[type=password] {
+      width:100%; padding:.8rem 1rem;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(99,102,241,0.25);
+      border-radius:10px; color:#e2e8f0;
+      font-size:.95rem; outline:none; transition: border-color .2s;
+    }
+    input[type=text]:focus, input[type=password]:focus {
+      border-color: #6366f1;
+    }
+    .btn {
+      width:100%; padding:.9rem; margin-top:.5rem;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color:white; border:none; border-radius:12px;
+      font-size:1rem; font-weight:700; cursor:pointer;
+      transition: opacity .2s;
+    }
+    .btn:hover { opacity:.88; }
+    .btn:disabled { opacity:.4; cursor:not-allowed; }
+    .error-box {
+      background: rgba(248,113,113,0.1);
+      border: 1px solid rgba(248,113,113,0.35);
+      border-radius:10px; padding:.75rem 1rem;
+      color:#f87171; font-size:.88rem;
+      margin-bottom:1rem; display:none;
+    }
+    .success-box {
+      background: rgba(52,211,153,0.1);
+      border: 1px solid rgba(52,211,153,0.35);
+      border-radius:10px; padding:.75rem 1rem;
+      color:#34d399; font-size:.88rem;
+      margin-bottom:1rem; display:none;
+    }
+    .pills {
+      display:flex; flex-wrap:wrap; gap:.5rem;
+      justify-content:center; margin-bottom:2rem;
+    }
+    .pill {
+      background: rgba(99,102,241,0.12);
+      border: 1px solid rgba(99,102,241,0.25);
+      border-radius:20px; padding:.3rem .9rem;
+      font-size:.78rem; color:#a5b4fc;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>⚡ Clean Master</h1>
+  <p class="sub">AI-Powered Data Cleaning Web App</p>
+  <div class="pills">
+    <span class="pill">KNN Imputation</span>
+    <span class="pill">Isolation Forest</span>
+    <span class="pill">Auto EDA</span>
+    <span class="pill">Quality Score</span>
+    <span class="pill">Free Forever</span>
+  </div>
+
+  <div class="card">
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" id="tab-login" onclick="switchTab('login')">🔐 Sign In</div>
+      <div class="tab"       id="tab-signup" onclick="switchTab('signup')">✨ Create Account</div>
+    </div>
+
+    <!-- Error / Success messages -->
+    <div class="error-box"   id="error-box"></div>
+    <div class="success-box" id="success-box"></div>
+
+    <!-- LOGIN FORM -->
+    <div id="form-login">
+      <form method="POST" action="/api/login" onsubmit="handleSubmit(event, this)">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" name="username" placeholder="Enter your username" required autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" name="password" placeholder="Enter your password" required autocomplete="current-password">
+        </div>
+        <button class="btn" type="submit" id="login-btn">Sign In →</button>
+      </form>
+    </div>
+
+    <!-- SIGNUP FORM -->
+    <div id="form-signup" style="display:none">
+      <form method="POST" action="/api/signup" onsubmit="handleSubmit(event, this)">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" name="username" placeholder="Choose a username" required autocomplete="username" minlength="3">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" name="password" id="pw1" placeholder="Choose a password" required autocomplete="new-password" minlength="4">
+        </div>
+        <div class="form-group">
+          <label>Confirm Password</label>
+          <input type="password" id="pw2" placeholder="Repeat your password" required autocomplete="new-password">
+        </div>
+        <button class="btn" type="submit" id="signup-btn">Create Account →</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function switchTab(tab) {
+      document.getElementById('form-login').style.display  = tab === 'login'  ? 'block' : 'none';
+      document.getElementById('form-signup').style.display = tab === 'signup' ? 'block' : 'none';
+      document.getElementById('tab-login').classList.toggle('active',  tab === 'login');
+      document.getElementById('tab-signup').classList.toggle('active', tab === 'signup');
+      hideMessages();
+    }
+
+    function hideMessages() {
+      document.getElementById('error-box').style.display   = 'none';
+      document.getElementById('success-box').style.display = 'none';
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-box');
+      el.textContent = '❌  ' + msg;
+      el.style.display = 'block';
+      document.getElementById('success-box').style.display = 'none';
+    }
+
+    function showSuccess(msg) {
+      const el = document.getElementById('success-box');
+      el.textContent = '✅  ' + msg;
+      el.style.display = 'block';
+      document.getElementById('error-box').style.display = 'none';
+    }
+
+    async function handleSubmit(e, form) {
+      e.preventDefault();
+      hideMessages();
+
+      // Validate confirm password on signup
+      if (form.action.includes('signup')) {
+        const p1 = document.getElementById('pw1').value;
+        const p2 = document.getElementById('pw2').value;
+        if (p1 !== p2) { showError('Passwords do not match'); return; }
+      }
+
+      const btn = form.querySelector('button[type=submit]');
+      btn.disabled = true;
+      btn.textContent = '⏳ Please wait...';
+
+      try {
+        const res = await fetch(form.action, {
+          method: 'POST',
+          body: new FormData(form),
+          redirect: 'follow'
+        });
+
+        if (res.ok || res.redirected) {
+          // Success — redirect to home
+          window.location.href = '/';
+        } else {
+          const data = await res.json().catch(()=>({detail:'Something went wrong'}));
+          showError(data.detail || 'Something went wrong');
+          btn.disabled = false;
+          btn.textContent = form.action.includes('signup') ? 'Create Account →' : 'Sign In →';
+        }
+      } catch (err) {
+        // fetch follows redirect — if we land here it worked
+        window.location.href = '/';
+      }
+    }
+  </script>
+</body>
+</html>
