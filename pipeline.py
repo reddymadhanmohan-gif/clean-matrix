@@ -101,6 +101,18 @@ def compute_quality_score(df: pd.DataFrame, is_post_clean: bool = False) -> dict
 # ─────────────────────────────────────────────
 # STEP 3 — AUTO EDA
 # ─────────────────────────────────────────────
+def clean_for_json(obj):
+    """Recursively replace nan/inf with None so JSON serialization never fails."""
+    if isinstance(obj, dict):
+        return {k: clean_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_for_json(v) for v in obj]
+    elif isinstance(obj, float):
+        if obj != obj or obj == float('inf') or obj == float('-inf'):
+            return None
+        return obj
+    return obj
+
 def auto_eda(df: pd.DataFrame) -> dict:
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     text_cols    = df.select_dtypes(include=['object', 'category']).columns.tolist()
@@ -138,7 +150,7 @@ def auto_eda(df: pd.DataFrame) -> dict:
         except Exception:
             pass
 
-    return eda
+    return clean_for_json(eda)
 
 
 # ─────────────────────────────────────────────
