@@ -167,9 +167,11 @@ async def clean_endpoint(request: Request):
             "impute_method"   : impute_method,
         })
     except Exception as e:
-        raise HTTPException(500, str(e))
+     import traceback
+     print("PIPELINE ERROR:", traceback.format_exc())
+     raise HTTPException(status_code=500, detail=f"Pipeline failed: {str(e)}")
     finally:
-        if os.path.exists(in_path): os.remove(in_path)
+      if os.path.exists(in_path): os.remove(in_path)
 
     return {
         "status"          : "success",
