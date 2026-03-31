@@ -118,7 +118,7 @@ def auto_eda(df: pd.DataFrame) -> dict:
         'outlier_preview':  [],
     }
 
-    # Top correlations
+     # Top correlations
     if len(numeric_cols) >= 2:
         corr   = df[numeric_cols].corr().abs()
         upper  = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
@@ -126,6 +126,7 @@ def auto_eda(df: pd.DataFrame) -> dict:
         eda['top_correlations'] = [
             {'col1': c[0], 'col2': c[1], 'corr': round(v, 3)}
             for c, v in pairs.items()
+            if not (v != v)
         ]
 
     # Outlier preview (top suspicious rows)
