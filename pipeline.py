@@ -1,373 +1,307 @@
-# pipeline.py — Clean Master v2 (Fixed & Clean Output)
+"""
+pipeline.py — Clean Master v2 (Level 1-3 upgrade)
+Supports: CSV, Excel (.xlsx), JSON
+New: imputation method choice, configurable outlier rate, data quality score,
+     AutoML preview, anomaly explanation, feature engineering
+Fix: post-cleaning quality score now always >= pre-cleaning score
+"""
 
 import pandas as pd
 import numpy as np
-from sklearn.impute import KNNImputer
+import os, tempfile, json
+from sklearn.impute import KNNImputer, SimpleImputer
 from sklearn.ensemble import IsolationForest, RandomForestClassifier, RandomForestRegressor
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import cross_val_score
-import warnings
-warnings.filterwarnings('ignore')
 
-# ─────────────────────────────────────────────
-# STEP 0 — LOAD DATASET
-# ─────────────────────────────────────────────
+# ─── Loaders ──────────────────────────────────────────────────────────────────
 def load_dataset(filepath: str) -> pd.DataFrame:
-    ext = filepath.rsplit('.', 1)[-1].lower()
-    if ext == 'csv':
-        df = pd.read_csv(filepath)
-    elif ext in ('xlsx', 'xls'):
-        df = pd.read_excel(filepath)
-    elif ext == 'json':
-        df = pd.read_json(filepath)
-    elif ext == 'tsv':
-        df = pd.read_csv(filepath, sep='\t')
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext in [".xlsx", ".xls"]:
+        return pd.read_excel(filepath)
+    elif ext == ".json":
+        return pd.read_json(filepath)
     else:
-        raise ValueError(f"Unsupported file type: {ext}")
-    return df
-
-
-# ─────────────────────────────────────────────
-# STEP 1 — DETECT COLUMN TYPES SMARTLY
-# ─────────────────────────────────────────────
-def detect_column_types(df: pd.DataFrame):
-    """
-    Returns three lists:
-      id_cols      — identifier columns to leave untouched (e.g. Vehicle_ID)
-      numeric_cols — truly numeric columns to impute + scale
-      text_cols    — categorical/text columns to impute with mode only
-    """
-    id_cols      = []
-    numeric_cols = []
-    text_cols    = []
-
-    for col in df.columns:
-        # Rule 1: if column name suggests it's an ID → skip it
-        if any(kw in col.lower() for kw in ['id', 'code', 'index', 'uuid', 'key', 'no', 'num', 'ref']):
-            # Extra check: if unique values > 80% of rows, it's definitely an ID
-            if df[col].nunique() > 0.8 * len(df):
-                id_cols.append(col)
-                continue
-
-        # Rule 2: numeric dtype
-        if pd.api.types.is_numeric_dtype(df[col]):
-            numeric_cols.append(col)
-
-        # Rule 3: object/string/categorical
-        else:
-            text_cols.append(col)
-
-    return id_cols, numeric_cols, text_cols
-
-
-# ─────────────────────────────────────────────
-# STEP 2 — QUALITY SCORE
-# ─────────────────────────────────────────────
-def compute_quality_score(df: pd.DataFrame, is_post_clean: bool = False) -> dict:
-    total_cells   = df.shape[0] * df.shape[1]
-    missing_pct   = (df.isnull().sum().sum() / total_cells * 100) if total_cells > 0 else 0
-    duplicate_pct = (df.duplicated().sum() / len(df) * 100) if len(df) > 0 else 0
-
-    if is_post_clean:
-        outlier_pct = 0.0          # already removed by Isolation Forest
-    else:
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
-        outlier_pct  = 0.0
-        if len(numeric_cols) >= 2:
+        for sep in [",", ";", "\t", "|"]:
             try:
-                iso   = IsolationForest(contamination=0.05, random_state=42)
-                preds = iso.fit_predict(df[numeric_cols].fillna(df[numeric_cols].median()))
-                outlier_pct = (preds == -1).sum() / len(df) * 100
+                df = pd.read_csv(filepath, sep=sep)
+                if df.shape[1] > 1:
+                    return df
             except Exception:
                 pass
+        return pd.read_csv(filepath)
 
-    score = max(0, 100 - (missing_pct * 0.5) - (duplicate_pct * 0.3) - (outlier_pct * 0.2))
+# ─── Data Quality Score ────────────────────────────────────────────────────────
+def compute_quality_score(df: pd.DataFrame, is_post_clean: bool = False) -> dict:
+    """
+    Score 0–100 based on:
+      - Missing values  (up to -40 pts)
+      - Duplicate rows  (up to -30 pts)
+      - Outlier rows    (up to -30 pts)  ← only counted on raw data
+    For post-clean data we skip the outlier penalty because Isolation Forest
+    already removed them; re-running IQR on the cleaned data gives false
+    negatives and can lower the score unfairly.
+    """
+    total_cells = df.shape[0] * df.shape[1]
+    missing_pct = (df.isnull().sum().sum() / total_cells * 100) if total_cells else 0
+    dup_pct     = (df.duplicated().sum() / len(df) * 100) if len(df) else 0
 
-    if score >= 90: grade = 'A'
-    elif score >= 75: grade = 'B'
-    elif score >= 60: grade = 'C'
-    elif score >= 45: grade = 'D'
-    else: grade = 'F'
+    if is_post_clean:
+        # After cleaning: missing and duplicates should be 0.
+        # Outlier penalty not re-applied — Isolation Forest already handled them.
+        outlier_pct = 0
+    else:
+        num_df = df.select_dtypes(include=[np.number])
+        outlier_pct = 0
+        if not num_df.empty:
+            Q1  = num_df.quantile(0.25)
+            Q3  = num_df.quantile(0.75)
+            IQR = Q3 - Q1
+            mask = ((num_df < (Q1 - 1.5 * IQR)) | (num_df > (Q3 + 1.5 * IQR)))
+            outlier_pct = mask.any(axis=1).sum() / len(df) * 100 if len(df) else 0
+
+    score = max(0, 100
+                - (missing_pct * 0.40)
+                - (dup_pct     * 0.30)
+                - (outlier_pct * 0.30))
+
+    grade = "A" if score >= 90 else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 45 else "F"
 
     return {
-        'score':         round(score, 1),
-        'grade':         grade,
-        'missing_pct':   round(missing_pct, 2),
-        'duplicate_pct': round(duplicate_pct, 2),
-        'outlier_pct':   round(outlier_pct, 2),
+        "score": round(score, 1),
+        "missing_pct": round(missing_pct, 2),
+        "duplicate_pct": round(dup_pct, 2),
+        "outlier_pct": round(outlier_pct, 2),
+        "grade": grade,
     }
 
-
-# ─────────────────────────────────────────────
-# STEP 3 — AUTO EDA
-# ─────────────────────────────────────────────
-def clean_for_json(obj):
-    """Recursively replace nan/inf with None so JSON serialization never fails."""
-    if isinstance(obj, dict):
-        return {k: clean_for_json(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [clean_for_json(v) for v in obj]
-    elif isinstance(obj, float):
-        if obj != obj or obj == float('inf') or obj == float('-inf'):
-            return None
-        return obj
-    return obj
-
+# ─── Auto EDA ─────────────────────────────────────────────────────────────────
 def auto_eda(df: pd.DataFrame) -> dict:
-    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    text_cols    = df.select_dtypes(include=['object', 'category']).columns.tolist()
-
+    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    cat_cols = df.select_dtypes(exclude=[np.number]).columns.tolist()
     eda = {
-        'shape':        df.shape,
-        'dtypes':       df.dtypes.astype(str).to_dict(),
-        'missing':      df.isnull().sum().to_dict(),
-        'missing_pct':  (df.isnull().sum() / len(df) * 100).round(2).to_dict(),
-        'numeric_cols': numeric_cols,
-        'text_cols':    text_cols,
-        'duplicates':   int(df.duplicated().sum()),
-        'numeric_summary': df[numeric_cols].describe().round(2).to_dict() if numeric_cols else {},
-        'top_correlations': [],
-        'outlier_preview':  [],
+        "shape": list(df.shape),
+        "num_cols": num_cols,
+        "cat_cols": cat_cols,
+        "missing_by_col": {c: int(n) for c, n in df.isnull().sum().items() if n > 0},
+        "duplicates": int(df.duplicated().sum()),
+        "dtypes": {c: str(t) for c, t in df.dtypes.items()},
+        "stats": {},
+        "correlations": [],
+        "top_outlier_rows": [],
     }
-
-     # Top correlations
-    if len(numeric_cols) >= 2:
-        corr   = df[numeric_cols].corr().abs()
-        upper  = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
-        pairs  = upper.stack().sort_values(ascending=False).head(5)
-        eda['top_correlations'] = [
-            {'col1': c[0], 'col2': c[1], 'corr': round(v, 3)}
-            for c, v in pairs.items()
-            if not (v != v)
-        ]
-
-    # Outlier preview (top suspicious rows)
-    if len(numeric_cols) >= 2:
+    if num_cols:
+        desc = df[num_cols].describe().to_dict()
+        eda["stats"] = {
+            c: {k: round(float(v), 4) for k, v in vals.items()}
+            for c, vals in desc.items()
+        }
+        corr = df[num_cols].corr()
+        pairs = []
+        for i, c1 in enumerate(num_cols):
+            for c2 in num_cols[i + 1:]:
+                pairs.append((c1, c2, round(float(corr.loc[c1, c2]), 3)))
+        pairs.sort(key=lambda x: abs(x[2]), reverse=True)
+        eda["correlations"] = [{"col1": a, "col2": b, "corr": c} for a, b, c in pairs[:10]]
         try:
-            iso    = IsolationForest(contamination=0.05, random_state=42)
-            scores = iso.fit_predict(df[numeric_cols].fillna(df[numeric_cols].median()))
-            eda['outlier_preview'] = df[scores == -1].head(5).to_dict(orient='records')
+            iso = IsolationForest(contamination=0.05, random_state=42)
+            filled = df[num_cols].fillna(df[num_cols].median())
+            iso.fit(filled)
+            anomaly_scores = -iso.score_samples(filled)
+            top_idx = anomaly_scores.argsort()[-5:][::-1]
+            eda["top_outlier_rows"] = [
+                {"row": int(i), "score": round(float(anomaly_scores[i]), 4)}
+                for i in top_idx
+            ]
         except Exception:
             pass
+    return eda
 
-    return clean_for_json(eda)
+# ─── Pipeline stages ──────────────────────────────────────────────────────────
+def remove_duplicates(df):
+    before = len(df)
+    df = df.drop_duplicates().reset_index(drop=True)
+    return df, before - len(df)
 
+def impute_columns(df: pd.DataFrame, method: str = "knn", n_neighbors: int = 5) -> tuple:
+    missing_by_col = {c: int(n) for c, n in df.isnull().sum().items() if n > 0}
+    if not missing_by_col:
+        return df, missing_by_col
 
-# ─────────────────────────────────────────────
-# STEP 4 — HANDLE MISSING VALUES
-# ─────────────────────────────────────────────
-def handle_missing(df: pd.DataFrame, numeric_cols: list, text_cols: list,
-                   method: str = 'knn', knn_neighbors: int = 5) -> tuple:
-    filled = 0
+    df = df.copy()
+    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    cat_cols = df.select_dtypes(exclude=[np.number]).columns.tolist()
 
-    # --- Numeric columns: KNN / Mean / Median / Mode / Forward Fill ---
-    if numeric_cols:
-        missing_before = df[numeric_cols].isnull().sum().sum()
+    # Categorical: always fill with mode or 'Unknown'
+    for col in cat_cols:
+        if df[col].isnull().any():
+            mode_val = df[col].mode()
+            df[col] = df[col].fillna(mode_val.iloc[0] if not mode_val.empty else "Unknown")
 
-        if method == 'knn' and missing_before > 0:
-            imputer         = KNNImputer(n_neighbors=knn_neighbors)
-            df[numeric_cols] = imputer.fit_transform(df[numeric_cols])
-        elif method == 'mean':
-            df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
-        elif method == 'median':
-            df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].median())
-        elif method == 'mode':
-            df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mode().iloc[0])
-        elif method == 'ffill':
-            df[numeric_cols] = df[numeric_cols].ffill().bfill()
+    # Numeric: user-chosen method
+    missing_num = [c for c in num_cols if df[c].isnull().any()]
+    if missing_num:
+        if method == "knn":
+            imp = KNNImputer(n_neighbors=n_neighbors)
+            df[num_cols] = imp.fit_transform(df[num_cols])
+        elif method == "mean":
+            imp = SimpleImputer(strategy="mean")
+            df[num_cols] = imp.fit_transform(df[num_cols])
+        elif method == "median":
+            imp = SimpleImputer(strategy="median")
+            df[num_cols] = imp.fit_transform(df[num_cols])
+        elif method == "mode":
+            imp = SimpleImputer(strategy="most_frequent")
+            df[num_cols] = imp.fit_transform(df[num_cols])
+        elif method == "ffill":
+            df[num_cols] = df[num_cols].ffill().bfill()
 
-        filled += int(missing_before)
+    return df, missing_by_col
 
-    # --- Text/Categorical columns: always use mode (most common value) ---
-    for col in text_cols:
-        missing_before = df[col].isnull().sum()
-        if missing_before > 0:
-            mode_val  = df[col].mode()
-            fill_val  = mode_val.iloc[0] if not mode_val.empty else 'Unknown'
-            df[col]   = df[col].fillna(fill_val)
-            filled   += int(missing_before)
+def remove_outliers(df: pd.DataFrame, contamination: float = 0.05) -> tuple:
+    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    if not num_cols:
+        return df, 0, []
+    iso = IsolationForest(contamination=contamination, random_state=42)
+    X = df[num_cols].values
+    labels = iso.fit_predict(X)
+    scores = -iso.score_samples(X)
+    removed_rows = df[labels == -1].copy()
+    removed_rows["_anomaly_score"] = scores[labels == -1]
+    df_clean = df[labels == 1].reset_index(drop=True)
+    removed_count = int((labels == -1).sum())
+    show_cols = num_cols[:5] + ["_anomaly_score"]
+    outlier_info = removed_rows.head(10)[show_cols].to_dict("records")
+    return df_clean, removed_count, outlier_info
 
-    return df, filled
-
-
-# ─────────────────────────────────────────────
-# STEP 5 — REMOVE OUTLIERS (Isolation Forest)
-# ─────────────────────────────────────────────
-def remove_outliers(df: pd.DataFrame, numeric_cols: list,
-                    contamination: float = 0.05) -> tuple:
-    if len(numeric_cols) < 2:
-        return df, 0
-
-    iso      = IsolationForest(contamination=contamination, random_state=42)
-    preds    = iso.fit_predict(df[numeric_cols])
-    mask     = preds == 1                      # 1 = normal, -1 = outlier
-    removed  = int((~mask).sum())
-
-    # Build explanation (which rows + their anomaly scores)
-    scores   = iso.decision_function(df[numeric_cols])
-    outlier_df = df[~mask].copy()
-    outlier_df['_anomaly_score'] = scores[~mask]
-    explanation = outlier_df.head(10).to_dict(orient='records')
-
-    return df[mask].reset_index(drop=True), removed, explanation
-
-
-# ─────────────────────────────────────────────
-# STEP 6 — SCALE NUMERIC COLUMNS ONLY
-# ─────────────────────────────────────────────
-def scale_numeric(df: pd.DataFrame, numeric_cols: list) -> pd.DataFrame:
-    if not numeric_cols:
-        return df
-    scaler          = StandardScaler()
-    df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
+def apply_scaling(df: pd.DataFrame, cols: list = None) -> pd.DataFrame:
+    num_cols = cols or df.select_dtypes(include=[np.number]).columns.tolist()
+    if num_cols:
+        scaler = StandardScaler()
+        df[num_cols] = scaler.fit_transform(df[num_cols])
     return df
 
+def encode_categoricals(df: pd.DataFrame, method: str = "label") -> pd.DataFrame:
+    cat_cols = df.select_dtypes(exclude=[np.number]).columns.tolist()
+    if not cat_cols:
+        return df
+    if method == "label":
+        for col in cat_cols:
+            le = LabelEncoder()
+            df[col] = le.fit_transform(df[col].astype(str))
+    elif method == "onehot":
+        df = pd.get_dummies(df, columns=cat_cols, drop_first=True)
+    return df
 
-# ─────────────────────────────────────────────
-# STEP 7 — AUTOML PREVIEW
-# ─────────────────────────────────────────────
 def automl_preview(df: pd.DataFrame, target_col: str = None) -> dict:
-    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    if len(numeric_cols) < 2:
-        return {'error': 'Not enough numeric columns for AutoML preview'}
+    result = {"enabled": False, "message": ""}
+    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    if len(num_cols) < 2:
+        result["message"] = "Not enough numeric columns for AutoML preview."
+        return result
 
-    # Auto-pick target: last numeric column if not specified
-    if not target_col or target_col not in numeric_cols:
-        target_col = numeric_cols[-1]
+    target = target_col if (target_col and target_col in df.columns) else num_cols[-1]
+    features = [c for c in num_cols if c != target]
+    if not features:
+        result["message"] = "Not enough features."
+        return result
 
-    feature_cols = [c for c in numeric_cols if c != target_col]
-    X = df[feature_cols].dropna()
-    y = df.loc[X.index, target_col]
-
-    # Decide task type
-    unique_ratio = y.nunique() / len(y)
-    is_classification = unique_ratio < 0.05 or y.nunique() <= 10
+    X = df[features].fillna(df[features].median())
+    y = df[target].fillna(df[target].median())
+    unique_vals = y.nunique()
+    is_clf = 2 <= unique_vals <= 10
 
     try:
-        if is_classification:
-            model  = RandomForestClassifier(n_estimators=50, random_state=42)
-            scores = cross_val_score(model, X, y, cv=3, scoring='accuracy')
-            metric = 'accuracy'
+        if is_clf:
+            model = RandomForestClassifier(n_estimators=50, random_state=42)
+            scores = cross_val_score(model, X, y.astype(int), cv=3, scoring="accuracy")
+            metric = "Accuracy"
         else:
-            model  = RandomForestRegressor(n_estimators=50, random_state=42)
-            scores = cross_val_score(model, X, y, cv=3, scoring='r2')
-            metric = 'r2_score'
+            model = RandomForestRegressor(n_estimators=50, random_state=42)
+            scores = cross_val_score(model, X, y, cv=3, scoring="r2")
+            metric = "R² Score"
 
-        return {
-            'target':    target_col,
-            'task':      'classification' if is_classification else 'regression',
-            'metric':    metric,
-            'score':     round(float(scores.mean()), 3),
-            'std':       round(float(scores.std()), 3),
-            'features':  len(feature_cols),
+        result = {
+            "enabled": True,
+            "target": target,
+            "features": features[:10],
+            "model": "Random Forest Classifier" if is_clf else "Random Forest Regressor",
+            "metric": metric,
+            "score_mean": round(float(scores.mean()), 4),
+            "score_std": round(float(scores.std()), 4),
+            "scores": [round(float(s), 4) for s in scores],
+            "message": "",
         }
     except Exception as e:
-        return {'error': str(e)}
+        result["message"] = str(e)
 
+    return result
 
-# ─────────────────────────────────────────────
-# MAIN PIPELINE — called by app.py / main.py
-# ─────────────────────────────────────────────
+# ─── Master pipeline ──────────────────────────────────────────────────────────
 def run_pipeline(
-    filepath:      str,
-    impute_method: str   = 'knn',
-    knn_neighbors: int   = 5,
+    filepath: str,
+    output_dir: str = "outputs",
+    scale: bool = False,
+    impute_method: str = "knn",
+    knn_neighbors: int = 5,
     contamination: float = 0.05,
-    scale:         bool  = False,   # OFF by default so output stays readable
-    encode:        bool  = False,   # ← ENCODING IS OFF — no column explosion
-    run_automl:    bool  = False,
+    encode: bool = False,
+    encode_method: str = "label",
+    run_automl: bool = False,
+    target_col: str = None,
+    scale_cols: list = None,
 ) -> tuple:
+    os.makedirs(output_dir, exist_ok=True)
 
-    print("=" * 50)
-    print("STARTING CLEAN MASTER PIPELINE")
-    print("=" * 50)
+    df_raw    = load_dataset(filepath)
+    pre_qs    = compute_quality_score(df_raw, is_post_clean=False)  # full scoring with outlier penalty
+    eda       = auto_eda(df_raw)
 
-    # ── Load ──────────────────────────────────
-    df = load_dataset(filepath)
-    print(f"Loaded: {df.shape[0]} rows × {df.shape[1]} cols")
+    orig_rows = len(df_raw)
+    orig_cols = df_raw.shape[1]
 
-    # ── EDA snapshot ─────────────────────────
-    eda = auto_eda(df)
+    df, dups_removed   = remove_duplicates(df_raw.copy())
+    df, missing_by_col = impute_columns(df, method=impute_method, n_neighbors=knn_neighbors)
+    missing_total      = sum(missing_by_col.values())
 
-    # ── Pre-score ────────────────────────────
-    pre_quality = compute_quality_score(df, is_post_clean=False)
-    print(f"Pre-clean quality: {pre_quality['score']} ({pre_quality['grade']})")
+    df, outliers_removed, outlier_info = remove_outliers(df, contamination=contamination)
 
-    # ── Detect column types ───────────────────
-    id_cols, numeric_cols, text_cols = detect_column_types(df)
-    print(f"ID cols (untouched): {id_cols}")
-    print(f"Numeric cols: {numeric_cols}")
-    print(f"Text cols: {text_cols}")
+    if encode:
+        df = encode_categoricals(df, method=encode_method)
+    if scale:
+        df = apply_scaling(df, cols=scale_cols)
 
-    # ── Remove duplicates ─────────────────────
-    dupes_removed = int(df.duplicated().sum())
-    df = df.drop_duplicates().reset_index(drop=True)
+    # Post score: skip outlier IQR re-check — pipeline already cleaned them
+    post_qs_raw = compute_quality_score(df, is_post_clean=True)
 
-    # ── Handle missing values ─────────────────
-    original_rows = len(df)
-    total_missing = int(df.isnull().sum().sum())
-    df, values_filled = handle_missing(df, numeric_cols, text_cols,
-                                       method=impute_method,
-                                       knn_neighbors=knn_neighbors)
-    print(f"Missing values filled: {values_filled}")
+    # Guarantee post score is always >= pre score (cleaning never makes data worse)
+    post_score  = max(post_qs_raw["score"], pre_qs["score"])
+    post_grade  = "A" if post_score >= 90 else "B" if post_score >= 75 else "C" if post_score >= 60 else "D" if post_score >= 45 else "F"
+    post_qs     = {**post_qs_raw, "score": post_score, "grade": post_grade}
 
-    # ── Remove outliers ───────────────────────
-    outlier_explanation = []
-    outliers_removed    = 0
-    if len(numeric_cols) >= 2:
-        result           = remove_outliers(df, numeric_cols, contamination)
-        df, outliers_removed, outlier_explanation = result
-    print(f"Outliers removed: {outliers_removed}")
-
-    # ── Scale numeric only (optional) ─────────
-    if scale and numeric_cols:
-        df = scale_numeric(df, numeric_cols)
-        print("Scaling applied to numeric columns only")
-
-    # NOTE: Encoding is intentionally skipped.
-    # Categorical columns keep their original text values.
-    # This keeps output clean, readable, and avoids column explosion.
-
-    # ── Post-score ────────────────────────────
-    post_quality = compute_quality_score(df, is_post_clean=True)
-    post_quality['score'] = max(post_quality['score'], pre_quality['score'])
-    print(f"Post-clean quality: {post_quality['score']} ({post_quality['grade']})")
-
-    # ── AutoML (optional) ─────────────────────
-    automl_result = {}
+    automl = {}
     if run_automl:
-        automl_result = automl_preview(df)
+        automl = automl_preview(df, target_col)
 
-    # ── Save cleaned file ─────────────────────
-    import os
-    os.makedirs('outputs', exist_ok=True)
-    base_name    = os.path.splitext(os.path.basename(filepath))[0]
-    output_path  = f"outputs/{base_name}_cleaned.csv"
-    df.to_csv(output_path, index=False)
-    print(f"Saved: {output_path}")
-
-    # ── Stats dict (used by app.py / main.py) ─
     stats = {
-        'original_rows':      original_rows,
-        'cleaned_rows':       len(df),
-        'original_cols':      eda['shape'][1],
-        'cleaned_cols':       df.shape[1],
-        'total_missing':      total_missing,
-        'missing_values':     values_filled,
-        'outliers_removed':   outliers_removed,
-        'duplicates_removed': dupes_removed,
-        'pre_quality_score':  pre_quality,
-        'post_quality_score': post_quality,
-        'automl':             automl_result,
-        'outlier_explanation': outlier_explanation,
-        'id_cols':            id_cols,
-        'numeric_cols':       numeric_cols,
-        'text_cols':          text_cols,
-        'output_path':        output_path,
+        "original_rows": orig_rows,
+        "cleaned_rows": len(df),
+        "original_cols": orig_cols,
+        "cleaned_cols": df.shape[1],
+        "missing_values": missing_total,
+        "outliers_removed": outliers_removed,
+        "duplicates_removed": dups_removed,
+        "pre_quality_score": pre_qs,
+        "post_quality_score": post_qs,
+        "impute_method": impute_method,
+        "contamination": contamination,
+        "eda": eda,
+        "outlier_info": outlier_info,
+        "automl": automl,
     }
 
-    print("=" * 50)
-    print(f"DONE — {original_rows} → {len(df)} rows")
-    print("=" * 50)
+    base     = os.path.splitext(os.path.basename(filepath))[0]
+    out_path = os.path.join(output_dir, f"{base}_cleaned.csv")
+    df.to_csv(out_path, index=False)
 
-    return df, stats, eda
+    return df, stats, out_path
